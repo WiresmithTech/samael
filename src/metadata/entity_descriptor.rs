@@ -187,7 +187,7 @@ pub struct EntityDescriptor {
     pub pdp_descriptors: Option<Vec<PdpDescriptors>>,
     #[serde(rename = "AffiliationDescriptor")]
     pub affiliation_descriptors: Option<AffiliationDescriptor>,
-    #[serde(rename = "ContactPerson")]
+    #[serde(rename = "ContactPerson", default)]
     pub contact_person: Option<Vec<ContactPerson>>,
     #[serde(rename = "Organization")]
     pub organization: Option<Organization>,
@@ -434,5 +434,47 @@ mod test {
         println!("{entity_descriptor:#?}");
 
         assert_eq!(&expected_entity_descriptor, entity_descriptor);
+    }
+}
+
+#[cfg(test)]
+mod contact_person_tests {
+    use super::*;
+
+    #[test]
+    fn deserialize_multiple_contact_persons() {
+        let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://test.example.org">
+  <ContactPerson contactType="technical">
+    <GivenName>Test</GivenName>
+  </ContactPerson>
+  <ContactPerson contactType="support">
+    <GivenName>Test2</GivenName>
+  </ContactPerson>
+</EntityDescriptor>"#;
+
+        let ed: EntityDescriptor = quick_xml::de::from_str(xml).unwrap();
+        let contacts = ed.contact_person.expect("contact_person should be Some");
+        assert_eq!(contacts.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod contact_person_ns_tests {
+    use super::*;
+
+    #[test]
+    fn deserialize_contact_person_with_namespaced_attribute() {
+        let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://test.example.org">
+  <ContactPerson contactType="technical">
+    <GivenName>Test</GivenName>
+  </ContactPerson>
+  <ContactPerson xmlns:remd="http://refeds.org/metadata" contactType="other" remd:contactType="http://refeds.org/metadata/contactType/security">
+    <GivenName>Test2</GivenName>
+  </ContactPerson>
+</EntityDescriptor>"#;
+
+        let ed: EntityDescriptor = quick_xml::de::from_str(xml).unwrap();
+        let contacts = ed.contact_person.expect("contact_person should be Some");
+        assert_eq!(contacts.len(), 2);
     }
 }

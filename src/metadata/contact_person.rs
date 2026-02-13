@@ -26,20 +26,90 @@ impl ContactType {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Default, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ContactPerson {
-    #[serde(rename = "@contactType")]
     pub contact_type: Option<String>,
-    #[serde(rename = "Company")]
     pub company: Option<String>,
-    #[serde(rename = "GivenName")]
     pub given_name: Option<String>,
-    #[serde(rename = "SurName")]
     pub sur_name: Option<String>,
-    #[serde(rename = "EmailAddress")]
     pub email_addresses: Option<Vec<String>>,
-    #[serde(rename = "TelephoneNumber")]
     pub telephone_numbers: Option<Vec<String>>,
+}
+
+impl<'de> serde::Deserialize<'de> for ContactPerson {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+
+        struct ContactPersonVisitor;
+
+        impl<'de> Visitor<'de> for ContactPersonVisitor {
+            type Value = ContactPerson;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("ContactPerson element")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut contact_type = None;
+                let mut company = None;
+                let mut given_name = None;
+                let mut sur_name = None;
+                let mut email_addresses: Option<Vec<String>> = None;
+                let mut telephone_numbers: Option<Vec<String>> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "@contactType" => {
+                            if contact_type.is_none() {
+                                contact_type = Some(map.next_value()?);
+                            } else {
+                                // Skip duplicate (e.g. from namespaced remd:contactType)
+                                map.next_value::<de::IgnoredAny>()?;
+                            }
+                        }
+                        "Company" => {
+                            company = Some(map.next_value()?);
+                        }
+                        "GivenName" => {
+                            given_name = Some(map.next_value()?);
+                        }
+                        "SurName" => {
+                            sur_name = Some(map.next_value()?);
+                        }
+                        "EmailAddress" => {
+                            let val: String = map.next_value()?;
+                            email_addresses.get_or_insert_with(Vec::new).push(val);
+                        }
+                        "TelephoneNumber" => {
+                            let val: String = map.next_value()?;
+                            telephone_numbers.get_or_insert_with(Vec::new).push(val);
+                        }
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+
+                Ok(ContactPerson {
+                    contact_type,
+                    company,
+                    given_name,
+                    sur_name,
+                    email_addresses,
+                    telephone_numbers,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(ContactPersonVisitor)
+    }
 }
 
 impl TryFrom<ContactPerson> for Event<'_> {
