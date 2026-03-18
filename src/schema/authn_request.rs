@@ -1,4 +1,4 @@
-use crate::crypto::{Crypto, CryptoProvider, CertificateDer};
+use crate::crypto::{CertificateDer, Crypto, CryptoProvider};
 use crate::schema::{Conditions, Issuer, NameIdPolicy, RequestedAuthnContext, Subject};
 use crate::signature::Signature;
 use chrono::prelude::*;
@@ -249,7 +249,9 @@ mod test {
         let public_cert = include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/test_vectors/public.der"
-        )).to_vec().into();
+        ))
+        .to_vec()
+        .into();
 
         let authn_request_sign_template = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -261,9 +263,7 @@ mod test {
             .add_key_info(&public_cert)
             .to_signed_xml(private_key)?;
 
-        assert!(
-            Crypto::verify_signed_xml(signed_authn_request, &public_cert, Some("ID"),).is_ok()
-        );
+        assert!(Crypto::verify_signed_xml(signed_authn_request, &public_cert, Some("ID"),).is_ok());
 
         Ok(())
     }

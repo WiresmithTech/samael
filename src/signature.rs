@@ -1,3 +1,4 @@
+use crate::crypto::CertificateDer;
 use crate::key_info::{KeyInfo, X509Data};
 use base64::{engine::general_purpose, Engine as _};
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
@@ -5,7 +6,6 @@ use quick_xml::Writer;
 use serde::Deserialize;
 use std::io::Cursor;
 use std::str::FromStr;
-use crate::crypto::CertificateDer;
 
 const NAME: &str = "ds:Signature";
 const SCHEMA: (&str, &str) = ("xmlns:ds", "http://www.w3.org/2000/09/xmldsig#");

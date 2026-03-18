@@ -3,10 +3,10 @@ use quick_xml::Writer;
 use serde::Deserialize;
 use std::io::Cursor;
 
-use crate::schema::Assertion;
-use crate::service_provider::Error;
 use crate::crypto::{Crypto, CryptoProvider};
 use crate::key_info::{EncryptedKeyInfo, KeyInfo};
+use crate::schema::Assertion;
+use crate::service_provider::Error;
 use crate::signature::DigestMethod;
 
 const NAME: &str = "saml2:EncryptedAssertion";
@@ -34,7 +34,10 @@ impl EncryptedAssertion {
         self.data.as_ref().and_then(|ed| ed.value_info())
     }
 
-    pub fn decrypt(&self, decryption_key: &<Crypto as CryptoProvider>::PrivateKey) -> Result<Assertion, Error> {
+    pub fn decrypt(
+        &self,
+        decryption_key: &<Crypto as CryptoProvider>::PrivateKey,
+    ) -> Result<Assertion, Error> {
         let (ekey, method) = self
             .encrypted_key_info()
             .ok_or(Error::MissingEncryptedKeyInfo)?;

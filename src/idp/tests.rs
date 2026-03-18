@@ -1,10 +1,21 @@
+#![cfg(feature = "xmlsec")]
+
 use super::*;
 use chrono::prelude::*;
 
-use crate::crypto::{Crypto, CryptoProvider};
+use crate::crypto::{CertificateDer, Crypto, CryptoProvider, ReduceMode, XmlSec};
 use crate::idp::sp_extractor::{RequiredAttribute, SPMetadataExtractor};
 use crate::idp::verified_request::UnverifiedAuthnRequest;
 use crate::service_provider::ServiceProvider;
+
+fn cert_der_from_pem(pem: &[u8]) -> CertificateDer {
+    CertificateDer::from(
+        openssl::x509::X509::from_pem(pem)
+            .expect("failed to parse test certificate")
+            .to_der()
+            .expect("failed to encode test certificate"),
+    )
+}
 
 #[test]
 fn test_self_signed_authn_request() {
@@ -112,7 +123,9 @@ fn test_signed_response() {
 fn test_signed_response_threads() {
     let verify = move || {
         let authn_request_xml = include_str!("../../test_vectors/authn_request.xml");
-        let cert_der = include_bytes!("../../test_vectors/sp_cert.der").to_vec().into();
+        let cert_der = include_bytes!("../../test_vectors/sp_cert.der")
+            .to_vec()
+            .into();
         let unverified =
             UnverifiedAuthnRequest::from_xml(authn_request_xml).expect("failed to parse");
         let _ = unverified
@@ -219,10 +232,9 @@ fn test_do_not_accept_unsigned_response() {
     assert!(resp.is_err());
 
     let err = resp.err().unwrap();
-    //todo: is this the correct error, doesn't really seem to fit the test description.
     assert!(matches!(
         err,
-        crate::service_provider::Error::FailedToParseSamlResponse(_)
+        crate::service_provider::Error::FailedToValidateSignature
     ))
 }
 
@@ -309,12 +321,12 @@ fn test_accept_signed_with_correct_key_idp_2() {
         "/test_vectors/response_signed_by_idp_2.xml",
     ));
 
-    let resp = sp.parse_xml_response(
-        correct_cert_signed_response_xml,
-        Some(&["ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685"]),
-    );
-
-    assert!(resp.is_ok());
+    let _resp = sp
+        .parse_xml_response(
+            correct_cert_signed_response_xml,
+            Some(&["ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685"]),
+        )
+        .expect("failed to parse response");
 }
 
 #[test]
@@ -340,10 +352,114 @@ fn test_accept_signed_with_correct_key_idp_3() {
         "/test_vectors/response_signed_by_idp_ecdsa.xml",
     ));
 
-    let resp = sp.parse_xml_response(
-        correct_cert_signed_response_xml,
-        Some(&["ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685"]),
+    let _resp = sp
+        .parse_xml_response(
+            correct_cert_signed_response_xml,
+            Some(&["ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685"]),
+        )
+        .expect("failed to parse response");
+}
+
+#[test]
+fn test_malicious_ancestors_not_included() {
+    let signed_xml = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_vectors/ancestor_attack_signed.xml"
+    ));
+    let cert = cert_der_from_pem(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_vectors/idp_2_metadata_public.pem"
+    )));
+
+    for (reduce_mode, result) in [
+        (ReduceMode::PreDigest, true),
+        (ReduceMode::ValidateAndMark, true),
+        (ReduceMode::ValidateAndMarkNoAncestors, true),
+    ] {
+        let reduced = XmlSec::reduce_xml_to_signed(signed_xml, &[cert.clone()], reduce_mode)
+            .expect("reduce_xml_to_signed should succeed");
+
+        assert_eq!(
+            !reduced.contains("https://attacker.evil.com"),
+            result,
+            "ancestor should not be contained in {reduce_mode:?}"
+        );
+    }
+}
+
+#[test]
+fn test_object_reference_removed() {
+    let signed_xml = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_vectors/object_attack_response.xml"
+    ));
+    let cert = cert_der_from_pem(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_vectors/idp_2_metadata_public.pem"
+    )));
+
+    for (reduce_mode, result) in [
+        (ReduceMode::PreDigest, true),
+        (ReduceMode::ValidateAndMark, true),
+        (ReduceMode::ValidateAndMarkNoAncestors, true),
+    ] {
+        let reduced = XmlSec::reduce_xml_to_signed(signed_xml, &[cert.clone()], reduce_mode)
+            .expect("reduce_xml_to_signed should succeed");
+
+        assert_eq!(
+            !reduced.contains("ds:Object"),
+            result,
+            "object should not be present in {reduce_mode:?}"
+        );
+    }
+}
+
+#[test]
+fn test_xpointer_attack_fixture_does_not_verify() {
+    let signed_xml = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_vectors/xpointer_attack_signed.xml"
+    ));
+    let cert = CertificateDer::from(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test_vectors/public.der"
+        ))
+        .to_vec(),
     );
 
-    assert!(resp.is_ok());
+    let error = XmlSec::verify_signed_xml(signed_xml, &cert, Some("ID"))
+        .expect_err("xpointer attack fixture should fail signature verification");
+
+    assert!(matches!(
+        error,
+        crate::crypto::CryptoError::InvalidSignature
+    ));
+}
+
+#[test]
+fn test_xpath_transforms_validated() {
+    let signed_xml = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_vectors/xpath_transform.xml"
+    ));
+    let cert = cert_der_from_pem(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_vectors/idp_2_metadata_public.pem"
+    )));
+
+    for (reduce_mode, result) in [
+        (ReduceMode::PreDigest, true),
+        (ReduceMode::ValidateAndMark, true),
+        (ReduceMode::ValidateAndMarkNoAncestors, true),
+    ] {
+        let reduced = XmlSec::reduce_xml_to_signed(signed_xml, &[cert.clone()], reduce_mode)
+            .expect("reduce_xml_to_signed should succeed");
+
+        assert_eq!(
+            !reduced.contains("malicious"),
+            result,
+            "malicious content should not be present in {reduce_mode:?}"
+        );
+    }
 }

@@ -1,6 +1,6 @@
 use quick_xml::events::Event;
 
-use crate::crypto::{decode_x509_cert, Crypto, CryptoProvider, CertificateDer};
+use crate::crypto::{decode_x509_cert, CertificateDer, Crypto, CryptoProvider};
 use crate::schema::AuthnRequest;
 
 use super::error::Error;
@@ -51,7 +51,10 @@ impl<'a> UnverifiedAuthnRequest<'a> {
             .map(|()| VerifiedAuthnRequest(self.request))
     }
 
-    pub fn try_verify_with_cert(self, der_cert: &CertificateDer) -> Result<VerifiedAuthnRequest, Error> {
+    pub fn try_verify_with_cert(
+        self,
+        der_cert: &CertificateDer,
+    ) -> Result<VerifiedAuthnRequest, Error> {
         Crypto::verify_signed_xml(self.xml.as_bytes(), der_cert, Some("ID"))?;
         Ok(VerifiedAuthnRequest(self.request))
     }
