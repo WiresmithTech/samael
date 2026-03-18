@@ -1,12 +1,12 @@
+use crate::crypto::CertificateDer;
 use crate::signature::SignatureAlgorithm;
 use base64::{engine::general_purpose, Engine as _};
-use std::collections::HashMap;
-use std::str::FromStr;
 use openssl::error::ErrorStack;
 use openssl::pkey::{PKey, Private};
+use std::collections::HashMap;
+use std::str::FromStr;
 use thiserror::Error;
 use url::Url;
-use crate::crypto::CertificateDer;
 
 #[derive(Debug, Error, Clone)]
 pub enum UrlVerifierError {
@@ -17,7 +17,7 @@ pub enum UrlVerifierError {
     #[error("No query to sign")]
     NoQueryToSign,
     #[error("Signing error")]
-    SigningError(#[from] ErrorStack)
+    SigningError(#[from] ErrorStack),
 }
 
 pub struct UrlVerifier {
@@ -55,9 +55,7 @@ impl UrlVerifier {
         Ok(Self { public_key })
     }
 
-    pub fn from_x509(
-        public_cert: &CertificateDer,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_x509(public_cert: &CertificateDer) -> Result<Self, Box<dyn std::error::Error>> {
         let public_cert = openssl::x509::X509::from_der(public_cert.der_data())?;
         let public_key = public_cert.public_key()?;
         Ok(Self { public_key })
@@ -195,8 +193,10 @@ impl UrlVerifier {
     }
 }
 
-
-pub fn sign_url(mut unsigned_url: Url, private_key: &PKey<Private>) -> Result<Url, UrlVerifierError> {
+pub fn sign_url(
+    mut unsigned_url: Url,
+    private_key: &PKey<Private>,
+) -> Result<Url, UrlVerifierError> {
     // Refer to section 3.4.4.1 (page 17) of
     //
     // https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf
@@ -229,7 +229,6 @@ pub fn sign_url(mut unsigned_url: Url, private_key: &PKey<Private>) -> Result<Ur
         .query()
         .ok_or(UrlVerifierError::NoQueryToSign)?
         .to_string();
-
 
     let mut signer =
         openssl::sign::Signer::new(openssl::hash::MessageDigest::sha256(), private_key)?;

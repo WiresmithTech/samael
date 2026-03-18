@@ -81,7 +81,7 @@ You'll need these dependencies for this example
 ```toml
 [dependencies]
 tokio = { version = "1.28.1", features = ["full"] }
-samael = { version = "0.0.12", features = ["xmlsec"] }
+samael = { version = "0.0.20", features = ["xmlsec"] }
 warp = "0.3.5"
 reqwest = "0.11.18"
 openssl = "0.10.52"

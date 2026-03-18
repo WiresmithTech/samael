@@ -1,6 +1,6 @@
 //! This module provides the behaviour if no crypto is available.
 
-use crate::crypto::{CryptoError, CryptoProvider, CertificateDer};
+use crate::crypto::{CertificateDer, CryptoError, CryptoProvider, ReduceMode};
 use crate::schema::CipherValue;
 
 pub struct NoCrypto;
@@ -16,9 +16,12 @@ impl CryptoProvider for NoCrypto {
         Ok(())
     }
 
-    fn reduce_xml_to_signed(_xml_str: &str, _certs: &[CertificateDer]) -> Result<String, CryptoError> {
-        // Since we cannot verify anything. Return empty.
-        Ok(String::new())
+    fn reduce_xml_to_signed(
+        _xml_str: &str,
+        _certs: &[CertificateDer],
+        _reduce_mode: ReduceMode,
+    ) -> Result<String, CryptoError> {
+        Err(CryptoError::CryptoDisabled)
     }
 
     fn decrypt_assertion_key_info(
@@ -42,5 +45,18 @@ impl CryptoProvider for NoCrypto {
         _private_key_der: &[u8],
     ) -> Result<String, CryptoError> {
         Err(CryptoError::CryptoDisabled)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reduce_xml_to_signed_fails_closed_when_crypto_is_disabled() {
+        let error = NoCrypto::reduce_xml_to_signed("<Response/>", &[], ReduceMode::ValidateAndMark)
+            .expect_err("signature reduction should fail when crypto support is disabled");
+
+        assert!(matches!(error, CryptoError::CryptoDisabled));
     }
 }

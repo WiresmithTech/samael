@@ -16,15 +16,17 @@ pub use libxml::tree::document::Document as XmlDocument;
 pub use libxml::tree::node::Node as XmlNode;
 
 mod backend;
+mod bindings;
 mod error;
 mod keys;
 mod xmldsig;
 mod xmlsec_internal;
-mod bindings;
 
 // exports
+pub use self::bindings::XMLSEC_DSIG_FLAGS_STORE_SIGNEDINFO_REFERENCES;
 pub use self::error::XmlSecError;
 pub use self::error::XmlSecResult;
 pub use self::keys::XmlSecKey;
 pub use self::keys::XmlSecKeyFormat;
+pub use self::xmldsig::VerifiedReference;
 pub use self::xmldsig::XmlSecSignatureContext;

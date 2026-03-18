@@ -9,7 +9,7 @@ use crate::schema::CipherValue;
 pub use cert_encoding::*;
 pub use ids::*;
 use thiserror::Error;
-pub use url_verification::{UrlVerifier, UrlVerifierError, sign_url};
+pub use url_verification::{sign_url, UrlVerifier, UrlVerifierError};
 #[cfg(feature = "xmlsec")]
 pub use xmlsec::*;
 
@@ -61,9 +61,34 @@ impl From<Vec<u8>> for CertificateDer {
     }
 }
 
+/// Defines which algorithm is used to reduce signed XML.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReduceMode {
+    /// Returns xmlsec's pre-digest content for exactly one verified reference across the document.
+    PreDigest,
+    /// Legacy mode that preserves the verified content and every element ancestor up to the
+    /// document root.
+    ///
+    /// This is kept for compatibility with older callers. It is not the default because unsigned
+    /// ancestors can survive reduction in this mode.
+    ValidateAndMark,
+    /// Returns a rooted XML document containing only xmlsec-verified content.
+    ///
+    /// If the verified reference is a full element, that element becomes the output root. If the
+    /// verified reference reduces to a child sequence, the referenced element is retained only as a
+    /// stripped shell so the verified descendants remain rooted.
+    ValidateAndMarkNoAncestors,
+}
+
+impl Default for ReduceMode {
+    fn default() -> Self {
+        Self::ValidateAndMarkNoAncestors
+    }
+}
+
 pub trait CryptoProvider {
     type PrivateKey;
-    
+
     fn verify_signed_xml<Bytes: AsRef<[u8]>>(
         xml: Bytes,
         x509_cert_der: &CertificateDer,
@@ -71,11 +96,15 @@ pub trait CryptoProvider {
     ) -> Result<(), CryptoError>;
 
     /// Takes an XML document, parses it, verifies all XML digital signatures against the given
-    /// certificates, and returns a derived version of the document where all elements that are not
-    /// covered by a digital signature have been removed.
+    /// certificates, and returns output according to `reduce_mode`.
+    ///
+    /// `ReduceMode::PreDigest` returns xmlsec's verified pre-digest payload for exactly one
+    /// reference. The validate modes return a rooted XML document derived from the original input
+    /// with all unsigned content removed.
     fn reduce_xml_to_signed(
         xml_str: &str,
         certs_der: &[CertificateDer],
+        reduce_mode: ReduceMode,
     ) -> Result<String, CryptoError>;
 
     fn decrypt_assertion_key_info(
