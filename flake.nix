@@ -26,7 +26,7 @@
             (import rust-overlay)
             (final: prev: {
               nix-filter = nix-filter.lib;
-              rust-toolchain = pkgs.rust-bin.stable.latest.default;
+              rust-toolchain = pkgs.rust-bin.nightly.latest.default;
               rust-dev-toolchain = pkgs.rust-toolchain.override {
                 extensions = [ "rust-src" ];
               };
