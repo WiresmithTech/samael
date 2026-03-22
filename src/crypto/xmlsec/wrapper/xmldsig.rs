@@ -68,7 +68,8 @@ impl XmlSecSignatureContext {
                 let uri = if ref_ctx.uri.is_null() {
                     None
                 } else {
-                    let uri_cstr = std::ffi::CStr::from_ptr(ref_ctx.uri as *const i8);
+                    let uri_cstr =
+                        std::ffi::CStr::from_ptr(ref_ctx.uri as *const std::ffi::c_char);
                     Some(
                         uri_cstr
                             .to_str()
@@ -84,7 +85,8 @@ impl XmlSecSignatureContext {
 
                 let data_ptr = bindings::xmlSecBufferGetData(predigest_buf);
                 let data_size = bindings::xmlSecBufferGetSize(predigest_buf);
-                let predigest_xml = predigest_xml_from_raw_buffer(data_ptr, data_size)?;
+                let predigest_xml =
+                    predigest_xml_from_raw_buffer(data_ptr, data_size as usize)?;
 
                 result.push(VerifiedReference { uri, predigest_xml });
             }
